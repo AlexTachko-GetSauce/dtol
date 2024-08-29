@@ -65,7 +65,7 @@ app.get('/ddupdates', async (req, res) => {
         // query: 'Checkout click env:production',
         query:
           '@type:http-outgoing env:production service:StorefrontNextJSService source:browser @http.url_details.path:(/api/orders/v1/storefront/orders/create OR /api/orders/v1/storefront/orders/*/fulfillment-info/update OR /api/orders/v1/storefront/orders/*/tips/update OR /api/orders/v1/storefront/orders/*/discount-coupon/update OR /api/orders/v1/storefront/orders/*/redeemed-gifts/update OR /api/orders/v1/storefront/orders/*/redeemed-credits/update)',
-        from: 'now-12h',
+        from: 'now-2h',
       },
       sort: 'timestamp',
       page: {
@@ -77,6 +77,19 @@ app.get('/ddupdates', async (req, res) => {
   const mappedLogs = logs?.data.map((log) => {
     const attributes = log?.attributes.attributes;
     const resBody = JSON.parse(attributes.res.body);
+    const fees = resBody.fees ?? [];
+    const deliveryFees = fees.filter(
+      (el) => el.type === 'DeliveryFee' || el.type === 'SmallOrderFee'
+    );
+    const totals = resBody.totals;
+    const deliveryFee = deliveryFees.length
+      ? deliveryFees.reduce((acc, el) => acc + el.amount, 0)
+      : 0;
+
+    const taxesAndFees = deliveryFee
+      ? totals.tax + totals.fees - deliveryFee
+      : totals.tax + totals.fees;
+
     return {
       // keys: Object.keys(log?.attributes.attributes).join(', '),
       // res: Object.keys(attributes.res.body).join(', '),
@@ -90,6 +103,8 @@ app.get('/ddupdates', async (req, res) => {
       totals: resBody.totals,
       type: resBody.type,
       itemsNumber: resBody.cart?.items?.length,
+      deliveryFee: Math.round(deliveryFee * 100) / 100,
+      taxesAndFees: Math.round(taxesAndFees * 100) / 100,
     };
   });
   const logsJson = JSON.stringify(mappedLogs);
@@ -97,8 +112,8 @@ app.get('/ddupdates', async (req, res) => {
   res.setHeader('access-control-allow-origin', '*');
   res.json({
     // logsJson,
-    // attributes: logs?.data[0].attributes.attributes,
-    // first: JSON.parse(logs?.data[0].attributes.attributes.res.body),
+    attributes: logs?.data[0].attributes.attributes,
+    first: JSON.parse(logs?.data[0].attributes.attributes.res.body),
     mappedLogs,
   });
   // res.send({ body: req.body });
@@ -112,7 +127,7 @@ app.get('/ddpupdates', async (req, res) => {
         // query: 'Checkout click env:production',
         query:
           '@type:http-outgoing env:production service:StorefrontNextJSService source:browser @http.url_details.path:(/api/orders/v1/storefront/orders/create OR /api/orders/v1/storefront/orders/*/fulfillment-info/update OR /api/orders/v1/storefront/orders/*/tips/update OR /api/orders/v1/storefront/orders/*/discount-coupon/update OR /api/orders/v1/storefront/orders/*/redeemed-gifts/update OR /api/orders/v1/storefront/orders/*/redeemed-credits/update)',
-        from: 'now-12h',
+        from: 'now-2h',
       },
       sort: 'timestamp',
       page: {
@@ -129,11 +144,25 @@ app.get('/ddpupdates', async (req, res) => {
     if (!mappedLogsObj[attributes.session_id]) {
       console.log('nex');
       const resBody = JSON.parse(attributes.res.body);
+      const fees = resBody.fees ?? [];
+      const deliveryFees = fees.filter(
+        (el) => el.type === 'DeliveryFee' || el.type === 'SmallOrderFee'
+      );
+      const totals = resBody.totals;
+      const deliveryFee = deliveryFees.length
+        ? deliveryFees.reduce((acc, el) => acc + el.amount, 0)
+        : 0;
+
+      const taxesAndFees = deliveryFee
+        ? totals.tax + totals.fees - deliveryFee
+        : totals.tax + totals.fees;
+      const isPaid = attributes.http.url.endsWith('pay') ? 'true' : 'false';
       mappedLogsObj[attributes.session_id] = {
         // keys: Object.keys(log?.attributes.attributes).join(', '),
         // res: Object.keys(attributes.res.body).join(', '),
         customSessionId: attributes.customSessionId,
         date: attributes.date,
+        timestamp: attributes.date,
         session_id: attributes.session_id,
         orderId: resBody.id,
         locationId: resBody.location?.id,
@@ -142,6 +171,9 @@ app.get('/ddpupdates', async (req, res) => {
         totals: resBody.totals,
         type: resBody.type,
         itemsNumber: resBody.cart?.items?.length,
+        isPaid: 'false',
+        deliveryFee: Math.round(deliveryFee * 100) / 100,
+        taxesAndFees: Math.round(taxesAndFees * 100) / 100,
       };
     }
     // console.log("Got incident " + incident.id);
