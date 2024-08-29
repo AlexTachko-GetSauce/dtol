@@ -1,7 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const app = express();
-const PORT = 3000;
+const PORT = 4100;
 
 const cors = require('cors');
 const dd = require('@datadog/datadog-api-client');
@@ -12,7 +12,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 app.listen(PORT, (error) => {
   if (!error) {
-    console.log('Server is Successfully Running');
+    console.log('Server is Successfully Running on 3000');
   } else console.log("Error occurred, server can't start", error);
 });
 
@@ -22,6 +22,8 @@ app.get('/', (req, res) => {
 
 const DD_API_KEY = process.env.DD_API_KEY;
 const DD_APP_KEY = process.env.DD_APP_KEY;
+console.log('DD_API_KEY', DD_API_KEY);
+console.log('DD_APP_KEY', DD_APP_KEY);
 const DD_SITE = 'us3.datadoghq.com';
 
 const configuration = dd.client.createConfiguration({
@@ -40,6 +42,7 @@ const apiLogsInstance = new dd.v2.LogsApi(configuration);
 const req_limit = 50;
 
 app.get('/ddevents', async (req, res) => {
+  console.log('ddevents');
   const logs = await apiEventsInstance.searchEventsWithPagination(
     { body: { query: 'Checkout' } },
     {}
@@ -55,6 +58,7 @@ app.get('/ddevents', async (req, res) => {
 });
 
 app.get('/ddupdates', async (req, res) => {
+  console.log('ddupdates');
   const params = {
     body: {
       filter: {
@@ -77,11 +81,12 @@ app.get('/ddupdates', async (req, res) => {
   // res.send({ body: req.body });
 });
 app.get('/ddlogs', async (req, res) => {
+  console.log('ddlogs');
   const params = {
     body: {
       filter: {
         query: 'Checkout click env:production',
-        from: 'now-12h',
+        from: 'now-1h',
         // to: '2020-09-17T12:48:36+01:00',
       },
       sort: 'timestamp',
@@ -97,7 +102,7 @@ app.get('/ddlogs', async (req, res) => {
         query:
           '@type:http-outgoing env:production service:StorefrontNextJSService source:browser @http.url_details.path:/api/orders/v1/storefront/orders/*/pay',
 
-        from: 'now-12h',
+        from: 'now-1h',
       },
       sort: 'timestamp',
       page: {
