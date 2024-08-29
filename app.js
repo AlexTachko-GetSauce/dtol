@@ -38,7 +38,7 @@ configuration.setServerVariables({
 });
 const apiEventsInstance = new dd.v2.EventsApi(configuration);
 const apiLogsInstance = new dd.v2.LogsApi(configuration);
-const req_limit = 10000;
+const req_limit = 5000;
 
 app.get('/ddevents', async (req, res) => {
   console.log('ddevents');
