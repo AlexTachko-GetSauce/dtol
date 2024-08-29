@@ -19,7 +19,6 @@ app.listen(PORT, (error) => {
 app.get('/', (req, res) => {
   res.send('App is running..');
 });
-
 const DD_API_KEY = process.env.DD_API_KEY;
 const DD_APP_KEY = process.env.DD_APP_KEY;
 console.log('DD_API_KEY', DD_API_KEY);
@@ -63,6 +62,7 @@ app.get('/ddupdates', async (req, res) => {
     body: {
       filter: {
         // "query": "@http.url_details.path:\/api\/orders\/v1\/storefront\/orders\/*\/pay",
+        // query: 'Checkout click env:production',
         query:
           '@type:http-outgoing env:production service:StorefrontNextJSService source:browser @http.url_details.path:(/api/orders/v1/storefront/orders/create OR /api/orders/v1/storefront/orders/*/fulfillment-info/update OR /api/orders/v1/storefront/orders/*/tips/update OR /api/orders/v1/storefront/orders/*/discount-coupon/update OR /api/orders/v1/storefront/orders/*/redeemed-gifts/update OR /api/orders/v1/storefront/orders/*/redeemed-credits/update)',
         from: 'now-1h',
@@ -73,7 +73,7 @@ app.get('/ddupdates', async (req, res) => {
       },
     },
   };
-  const logs = await apiEventsInstance.searchEvents(params, {});
+  const logs = await apiLogsInstance.listLogs(params);
   const logsJson = JSON.stringify(logs);
 
   res.setHeader('access-control-allow-origin', '*');
