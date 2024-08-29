@@ -118,6 +118,8 @@ app.get('/ddupdates', async (req, res) => {
 });
 app.get('/ddpupdates', async (req, res) => {
   console.log('ddpupdates');
+  const hours = req.query.hours;
+  const from = isNaN(Number(hours)) ? 'now-24h' : `now-${hours}h`;
   const params = {
     body: {
       filter: {
@@ -125,7 +127,7 @@ app.get('/ddpupdates', async (req, res) => {
         // query: 'Checkout click env:production',
         query:
           '@type:http-outgoing env:production service:StorefrontNextJSService source:browser @http.url_details.path:(/api/orders/v1/storefront/orders/create OR /api/orders/v1/storefront/orders/*/fulfillment-info/update OR /api/orders/v1/storefront/orders/*/tips/update OR /api/orders/v1/storefront/orders/*/discount-coupon/update OR /api/orders/v1/storefront/orders/*/redeemed-gifts/update OR /api/orders/v1/storefront/orders/*/redeemed-credits/update OR /api/orders/v1/storefront/orders/*/pay) status:info',
-        from: 'now-24h',
+        from: from,
       },
       sort: '-timestamp',
       page: {
@@ -138,16 +140,10 @@ app.get('/ddpupdates', async (req, res) => {
 
   for await (const logg of apiLogsInstance.listLogsWithPagination(params)) {
     const attributes = logg?.attributes?.attributes;
-    console.log(logg?.attributes?.attributes.customSessionId);
     if (
       !mappedLogsObj[attributes.session_id] ||
       mappedLogsObj[attributes.session_id].date < attributes.date
     ) {
-      // console.log(
-      //   'nex',
-      //   mappedLogsObj[attributes.session_id]?.date,
-      //   attributes.date
-      // );
       const resBody = JSON.parse(attributes.res.body);
       const fees = resBody.fees ?? [];
       const deliveryFees = fees.filter(
