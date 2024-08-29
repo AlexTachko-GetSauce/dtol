@@ -153,6 +153,7 @@ app.get('/ddpupdates', async (req, res) => {
       const totals = resBody.totals;
       let deliveryFee = 0;
       let taxesAndFees = 0;
+      let noDeliveryFees = 0;
       if (!totals || !deliveryFees) {
         console.log(resBody);
       } else {
@@ -160,6 +161,7 @@ app.get('/ddpupdates', async (req, res) => {
           ? deliveryFees.reduce((acc, el) => acc + el.amount, 0)
           : 0;
 
+        noDeliveryFees = deliveryFee ? totals.fees - deliveryFee : totals.fees;
         taxesAndFees = deliveryFee
           ? totals.tax + totals.fees - deliveryFee
           : totals.tax + totals.fees;
@@ -185,6 +187,7 @@ app.get('/ddpupdates', async (req, res) => {
         itemsNumber: resBody.cart?.items?.length,
         isPaid: isPaid,
         isCreate: isCreate,
+        noDeliveryFees: Math.round(noDeliveryFees * 100) / 100,
         deliveryFee: Math.round(deliveryFee * 100) / 100,
         taxesAndFees: Math.round(taxesAndFees * 100) / 100,
       };
