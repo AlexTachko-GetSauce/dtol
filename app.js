@@ -21,8 +21,6 @@ app.get('/', (req, res) => {
 });
 const DD_API_KEY = process.env.DD_API_KEY;
 const DD_APP_KEY = process.env.DD_APP_KEY;
-console.log('DD_API_KEY', DD_API_KEY);
-console.log('DD_APP_KEY', DD_APP_KEY);
 const DD_SITE = 'us3.datadoghq.com';
 
 const configuration = dd.client.createConfiguration({
@@ -61,13 +59,13 @@ app.get('/ddupdates', async (req, res) => {
   const params = {
     body: {
       filter: {
-        // "query": "@http.url_details.path:\/api\/orders\/v1\/storefront\/orders\/*\/pay",
+        // query: '@http.url_details.path:/api/orders/v1/storefront/orders/*/pay',
         // query: 'Checkout click env:production',
         query:
-          '@type:http-outgoing env:production service:StorefrontNextJSService source:browser @http.url_details.path:(/api/orders/v1/storefront/orders/create OR /api/orders/v1/storefront/orders/*/fulfillment-info/update OR /api/orders/v1/storefront/orders/*/tips/update OR /api/orders/v1/storefront/orders/*/discount-coupon/update OR /api/orders/v1/storefront/orders/*/redeemed-gifts/update OR /api/orders/v1/storefront/orders/*/redeemed-credits/update)',
-        from: 'now-2h',
+          '@type:http-outgoing env:production service:StorefrontNextJSService source:browser @http.url_details.path:(/api/orders/v1/storefront/orders/create OR /api/orders/v1/storefront/orders/*/fulfillment-info/update OR /api/orders/v1/storefront/orders/*/tips/update OR /api/orders/v1/storefront/orders/*/discount-coupon/update OR /api/orders/v1/storefront/orders/*/redeemed-gifts/update OR /api/orders/v1/storefront/orders/*/redeemed-credits/update OR /api/orders/v1/storefront/orders/*/pay)',
+        from: 'now-24h',
       },
-      sort: 'timestamp',
+      sort: '-timestamp',
       page: {
         limit: req_limit,
       },
@@ -126,10 +124,10 @@ app.get('/ddpupdates', async (req, res) => {
         // "query": "@http.url_details.path:\/api\/orders\/v1\/storefront\/orders\/*\/pay",
         // query: 'Checkout click env:production',
         query:
-          '@type:http-outgoing env:production service:StorefrontNextJSService source:browser @http.url_details.path:(/api/orders/v1/storefront/orders/create OR /api/orders/v1/storefront/orders/*/fulfillment-info/update OR /api/orders/v1/storefront/orders/*/tips/update OR /api/orders/v1/storefront/orders/*/discount-coupon/update OR /api/orders/v1/storefront/orders/*/redeemed-gifts/update OR /api/orders/v1/storefront/orders/*/redeemed-credits/update)',
-        from: 'now-2h',
+          '@type:http-outgoing env:production service:StorefrontNextJSService source:browser @http.url_details.path:(/api/orders/v1/storefront/orders/create OR /api/orders/v1/storefront/orders/*/fulfillment-info/update OR /api/orders/v1/storefront/orders/*/tips/update OR /api/orders/v1/storefront/orders/*/discount-coupon/update OR /api/orders/v1/storefront/orders/*/redeemed-gifts/update OR /api/orders/v1/storefront/orders/*/redeemed-credits/update OR /api/orders/v1/storefront/orders/*/pay) status:info',
+        from: 'now-24h',
       },
-      sort: 'timestamp',
+      sort: '-timestamp',
       page: {
         limit: req_limit,
       },
@@ -141,22 +139,40 @@ app.get('/ddpupdates', async (req, res) => {
   for await (const logg of apiLogsInstance.listLogsWithPagination(params)) {
     const attributes = logg?.attributes?.attributes;
     console.log(logg?.attributes?.attributes.customSessionId);
-    if (!mappedLogsObj[attributes.session_id]) {
-      console.log('nex');
+    if (
+      !mappedLogsObj[attributes.session_id] ||
+      mappedLogsObj[attributes.session_id].date < attributes.date
+    ) {
+      // console.log(
+      //   'nex',
+      //   mappedLogsObj[attributes.session_id]?.date,
+      //   attributes.date
+      // );
       const resBody = JSON.parse(attributes.res.body);
       const fees = resBody.fees ?? [];
       const deliveryFees = fees.filter(
         (el) => el.type === 'DeliveryFee' || el.type === 'SmallOrderFee'
       );
-      const totals = resBody.totals;
-      const deliveryFee = deliveryFees.length
-        ? deliveryFees.reduce((acc, el) => acc + el.amount, 0)
-        : 0;
 
-      const taxesAndFees = deliveryFee
-        ? totals.tax + totals.fees - deliveryFee
-        : totals.tax + totals.fees;
+      const totals = resBody.totals;
+      let deliveryFee = 0;
+      let taxesAndFees = 0;
+      if (!totals || !deliveryFees) {
+        console.log(resBody);
+      } else {
+        deliveryFee = deliveryFees.length
+          ? deliveryFees.reduce((acc, el) => acc + el.amount, 0)
+          : 0;
+
+        taxesAndFees = deliveryFee
+          ? totals.tax + totals.fees - deliveryFee
+          : totals.tax + totals.fees;
+      }
+
       const isPaid = attributes.http.url.endsWith('pay') ? 'true' : 'false';
+      const isCreate = attributes.http.url.endsWith('create')
+        ? 'true'
+        : 'false';
       mappedLogsObj[attributes.session_id] = {
         // keys: Object.keys(log?.attributes.attributes).join(', '),
         // res: Object.keys(attributes.res.body).join(', '),
@@ -171,7 +187,8 @@ app.get('/ddpupdates', async (req, res) => {
         totals: resBody.totals,
         type: resBody.type,
         itemsNumber: resBody.cart?.items?.length,
-        isPaid: 'false',
+        isPaid: isPaid,
+        isCreate: isCreate,
         deliveryFee: Math.round(deliveryFee * 100) / 100,
         taxesAndFees: Math.round(taxesAndFees * 100) / 100,
       };
