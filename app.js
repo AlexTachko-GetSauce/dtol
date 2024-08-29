@@ -38,7 +38,7 @@ configuration.setServerVariables({
 });
 const apiEventsInstance = new dd.v2.EventsApi(configuration);
 const apiLogsInstance = new dd.v2.LogsApi(configuration);
-const req_limit = 500;
+const req_limit = 10000;
 
 app.get('/ddevents', async (req, res) => {
   console.log('ddevents');
@@ -65,7 +65,7 @@ app.get('/ddupdates', async (req, res) => {
         // query: 'Checkout click env:production',
         query:
           '@type:http-outgoing env:production service:StorefrontNextJSService source:browser @http.url_details.path:(/api/orders/v1/storefront/orders/create OR /api/orders/v1/storefront/orders/*/fulfillment-info/update OR /api/orders/v1/storefront/orders/*/tips/update OR /api/orders/v1/storefront/orders/*/discount-coupon/update OR /api/orders/v1/storefront/orders/*/redeemed-gifts/update OR /api/orders/v1/storefront/orders/*/redeemed-credits/update)',
-        from: 'now-1h',
+        from: 'now-12h',
       },
       sort: 'timestamp',
       page: {
@@ -74,12 +74,110 @@ app.get('/ddupdates', async (req, res) => {
     },
   };
   const logs = await apiLogsInstance.listLogs(params);
-  const logsJson = JSON.stringify(logs);
+  const mappedLogs = logs?.data.map((log) => {
+    const attributes = log?.attributes.attributes;
+    const resBody = JSON.parse(attributes.res.body);
+    return {
+      // keys: Object.keys(log?.attributes.attributes).join(', '),
+      // res: Object.keys(attributes.res.body).join(', '),
+      customSessionId: attributes.customSessionId,
+      date: attributes.date,
+      session_id: attributes.session_id,
+      orderId: resBody.id,
+      locationId: resBody.location?.id,
+      locationName: resBody.location?.name,
+      tips: resBody.tips,
+      totals: resBody.totals,
+      type: resBody.type,
+      itemsNumber: resBody.cart?.items?.length,
+    };
+  });
+  const logsJson = JSON.stringify(mappedLogs);
 
   res.setHeader('access-control-allow-origin', '*');
-  res.json({ logsJson });
+  res.json({
+    // logsJson,
+    // attributes: logs?.data[0].attributes.attributes,
+    // first: JSON.parse(logs?.data[0].attributes.attributes.res.body),
+    mappedLogs,
+  });
   // res.send({ body: req.body });
 });
+app.get('/ddpupdates', async (req, res) => {
+  console.log('ddpupdates');
+  const params = {
+    body: {
+      filter: {
+        // "query": "@http.url_details.path:\/api\/orders\/v1\/storefront\/orders\/*\/pay",
+        // query: 'Checkout click env:production',
+        query:
+          '@type:http-outgoing env:production service:StorefrontNextJSService source:browser @http.url_details.path:(/api/orders/v1/storefront/orders/create OR /api/orders/v1/storefront/orders/*/fulfillment-info/update OR /api/orders/v1/storefront/orders/*/tips/update OR /api/orders/v1/storefront/orders/*/discount-coupon/update OR /api/orders/v1/storefront/orders/*/redeemed-gifts/update OR /api/orders/v1/storefront/orders/*/redeemed-credits/update)',
+        from: 'now-12h',
+      },
+      sort: 'timestamp',
+      page: {
+        limit: req_limit,
+      },
+    },
+  };
+
+  const mappedLogsObj = {};
+
+  for await (const logg of apiLogsInstance.listLogsWithPagination(params)) {
+    const attributes = logg?.attributes?.attributes;
+    console.log(logg?.attributes?.attributes.customSessionId);
+    if (!mappedLogsObj[attributes.session_id]) {
+      console.log('nex');
+      const resBody = JSON.parse(attributes.res.body);
+      mappedLogsObj[attributes.session_id] = {
+        // keys: Object.keys(log?.attributes.attributes).join(', '),
+        // res: Object.keys(attributes.res.body).join(', '),
+        customSessionId: attributes.customSessionId,
+        date: attributes.date,
+        session_id: attributes.session_id,
+        orderId: resBody.id,
+        locationId: resBody.location?.id,
+        locationName: resBody.location?.name,
+        tips: resBody.tips,
+        totals: resBody.totals,
+        type: resBody.type,
+        itemsNumber: resBody.cart?.items?.length,
+      };
+    }
+    // console.log("Got incident " + incident.id);
+  }
+
+  // const logs = await apiLogsInstance.listLogs(params);
+  // const mappedLogs = logs?.data.map((log) => {
+  //   const attributes = log?.attributes.attributes;
+  //   const resBody = JSON.parse(attributes.res.body);
+  //   return {
+  //     // keys: Object.keys(log?.attributes.attributes).join(', '),
+  //     // res: Object.keys(attributes.res.body).join(', '),
+  //     customSessionId: attributes.customSessionId,
+  //     date: attributes.date,
+  //     session_id: attributes.session_id,
+  //     orderId: resBody.id,
+  //     locationId: resBody.location?.id,
+  //     locationName: resBody.location?.name,
+  //     tips: resBody.tips,
+  //     totals: resBody.totals,
+  //     type: resBody.type,
+  //     itemsNumber: resBody.cart?.items?.length,
+  //   };
+  // });
+  // const logsJson = JSON.stringify(mappedLogs);
+
+  res.setHeader('access-control-allow-origin', '*');
+  res.json({
+    // logsJson,
+    // attributes: logs?.data[0].attributes.attributes,
+    // first: JSON.parse(logs?.data[0].attributes.attributes.res.body),
+    mappedLogs: Object.values(mappedLogsObj),
+  });
+  // res.send({ body: req.body });
+});
+
 app.get('/ddlogs', async (req, res) => {
   console.log('ddlogs');
   const params = {
