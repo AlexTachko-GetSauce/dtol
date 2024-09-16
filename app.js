@@ -1,5 +1,6 @@
 const express = require('express');
 const bodyParser = require('body-parser');
+const XLSX = require('xlsx');
 const app = express();
 const PORT = 4100;
 
@@ -192,7 +193,6 @@ app.get('/ddpupdates', async (req, res) => {
         taxesAndFees: Math.round(taxesAndFees * 100) / 100,
       };
     }
-    // console.log("Got incident " + incident.id);
   }
 
   // const logs = await apiLogsInstance.listLogs(params);
@@ -315,5 +315,111 @@ app.get('/ddlogs', async (req, res) => {
   // res.send({ body: req.body });
 });
 
-// app.use('/.netlify/functions/api', router);
-// module.exports.handler = serverless(app);
+const getData = async (hours) => {
+  const from = isNaN(Number(hours)) ? 'now-24h' : `now-${hours}h`;
+  const params = {
+    body: {
+      filter: {
+        // "query": "@http.url_details.path:\/api\/orders\/v1\/storefront\/orders\/*\/pay",
+        // query: 'Checkout click env:production',
+        query:
+          '@type:http-outgoing env:production service:StorefrontNextJSService source:browser @http.url_details.path:(/api/orders/v1/storefront/orders/create OR /api/orders/v1/storefront/orders/*/fulfillment-info/update OR /api/orders/v1/storefront/orders/*/tips/update OR /api/orders/v1/storefront/orders/*/discount-coupon/update OR /api/orders/v1/storefront/orders/*/redeemed-gifts/update OR /api/orders/v1/storefront/orders/*/redeemed-credits/update OR /api/orders/v1/storefront/orders/*/pay) status:info',
+        from: from,
+      },
+      sort: '-timestamp',
+      page: {
+        limit: req_limit,
+      },
+    },
+  };
+
+  const mappedLogsObj = {};
+
+  for await (const logg of apiLogsInstance.listLogsWithPagination(params)) {
+    const attributes = logg?.attributes?.attributes;
+    if (
+      !mappedLogsObj[attributes.session_id] ||
+      mappedLogsObj[attributes.session_id].date < attributes.date
+    ) {
+      const resBody = JSON.parse(attributes.res.body);
+      const fees = resBody.fees ?? [];
+      const deliveryFees = fees.filter(
+        (el) => el.type === 'DeliveryFee' || el.type === 'SmallOrderFee'
+      );
+
+      const totals = resBody.totals;
+      let deliveryFee = 0;
+      let taxesAndFees = 0;
+      let noDeliveryFees = 0;
+      if (!totals || !deliveryFees) {
+        console.log(resBody);
+      } else {
+        deliveryFee = deliveryFees.length
+          ? deliveryFees.reduce((acc, el) => acc + el.amount, 0)
+          : 0;
+
+        noDeliveryFees = deliveryFee ? totals.fees - deliveryFee : totals.fees;
+        taxesAndFees = deliveryFee
+          ? totals.tax + totals.fees - deliveryFee
+          : totals.tax + totals.fees;
+      }
+
+      const isPaid = attributes.http.url.endsWith('pay') ? 'true' : 'false';
+      const isCreate = attributes.http.url.endsWith('create')
+        ? 'true'
+        : 'false';
+      mappedLogsObj[attributes.session_id] = {
+        // keys: Object.keys(log?.attributes.attributes).join(', '),
+        // res: Object.keys(attributes.res.body).join(', '),
+        customSessionId: attributes.customSessionId,
+        date: attributes.date,
+        timestamp: attributes.date,
+        session_id: attributes.session_id,
+        orderId: resBody.id,
+        locationId: resBody.location?.id,
+        locationName: resBody.location?.name,
+        tips: resBody.tips,
+        totals: resBody.totals,
+        type: resBody.type,
+        itemsNumber: resBody.cart?.items?.length,
+        isPaid: isPaid,
+        isCreate: isCreate,
+        noDeliveryFees: Math.round(noDeliveryFees * 100) / 100,
+        deliveryFee: Math.round(deliveryFee * 100) / 100,
+        taxesAndFees: Math.round(taxesAndFees * 100) / 100,
+      };
+    }
+  }
+  return mappedLogsObj;
+};
+
+app.get('/ddpupdates-excel', async (req, res) => {
+  console.log('ddpupdates');
+  const hours = req.query.hours;
+  const data = await getData(hours);
+
+  const worksheet = XLSX.utils.json_to_sheet(data);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Events');
+  const excelBuffer = XLSX.write(workbook, {
+    type: 'buffer',
+    bookType: 'xlsx',
+  });
+
+  // Set headers to prompt file download
+  res.setHeader(
+    'Content-Disposition',
+    'attachment; filename=filtered-data.xlsx'
+  );
+  res.setHeader(
+    'Content-Type',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  );
+
+  res.setHeader('access-control-allow-origin', '*');
+  return res.send(excelBuffer);
+  // res.json({
+  //   mappedLogs: Object.values(data),
+  // });
+  // res.send({ body: req.body });
+});
