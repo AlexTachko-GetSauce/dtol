@@ -397,8 +397,9 @@ app.get('/ddpupdates-excel', async (req, res) => {
   console.log('ddpupdates');
   const hours = req.query.hours;
   const data = await getData(hours);
+  const jsonFromData = JSON.stringify(Object.values(data));
 
-  const worksheet = XLSX.utils.json_to_sheet(Object.values(data));
+  const worksheet = XLSX.utils.json_to_sheet(jsonFromData);
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Events');
   const excelBuffer = XLSX.write(workbook, {
