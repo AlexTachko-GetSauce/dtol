@@ -341,6 +341,7 @@ const getData = async (hours) => {
       !mappedLogsObj[attributes.session_id] ||
       mappedLogsObj[attributes.session_id].date < attributes.date
     ) {
+      console.log('session_id', attributes.session_id);
       const resBody = JSON.parse(attributes.res.body);
       const fees = resBody.fees ?? [];
       const deliveryFees = fees.filter(
@@ -394,12 +395,29 @@ const getData = async (hours) => {
 };
 
 app.get('/ddpupdates-excel', async (req, res) => {
-  console.log('ddpupdates');
+  console.log('ddpupdates-excel');
   const hours = req.query.hours;
   const data = await getData(hours);
-  const jsonFromData = JSON.stringify(Object.values(data));
+  const mappedData = Object.values(data).map((row) => ({
+    'Location name': row.locationName,
+    'Location id': row.locationId,
+    Paid: row.isPaid,
+    'create only': row.isCreate,
+    Items: row.itemsNumber,
+    Subtotal: row.totals.subtotal,
+    Discount: row.totals.discount,
+    'Delivery fee': row.deliveryFee,
+    'Fees (except delivery)': row.noDeliveryFees,
+    Taxes: row.totals.tax,
+    'Taxes and fees': row.taxesAndFees,
+    Tips: row.totals.tips,
+    Total: row.totals.total,
+    Type: row.type,
+    'Order Id': row.orderId,
+  }));
+  console.log('mappedData length', mappedData.length);
 
-  const worksheet = XLSX.utils.json_to_sheet(jsonFromData);
+  const worksheet = XLSX.utils.json_to_sheet(mappedData);
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Events');
   const excelBuffer = XLSX.write(workbook, {
