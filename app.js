@@ -17,6 +17,19 @@ app.listen(PORT, (error) => {
   } else console.log("Error occurred, server can't start", error);
 });
 
+function formatTimestamp(timestamp) {
+  const date = new Date(timestamp); // Create a Date object from the timestamp
+
+  const year = date.getFullYear(); // Get full year
+  const month = String(date.getMonth() + 1).padStart(2, '0'); // Get month (0-based) and pad with leading zero
+  const day = String(date.getDate()).padStart(2, '0'); // Get day and pad with leading zero
+
+  const hours = String(date.getHours()).padStart(2, '0'); // Get hours and pad with leading zero
+  const minutes = String(date.getMinutes()).padStart(2, '0'); // Get minutes and pad with leading zero
+
+  return `${year}-${month}-${day}, ${hours}:${minutes}`; // Return formatted date string
+}
+
 app.get('/', (req, res) => {
   res.send('App is running..');
 });
@@ -93,7 +106,7 @@ app.get('/ddupdates', async (req, res) => {
       keys: Object.keys(log?.attributes.attributes).join(', '),
       // res: Object.keys(attributes.res.body).join(', '),
       customSessionId: attributes.customSessionId,
-      date: attributes.date,
+      date: formatTimestamp(attributes.date),
       session_id: attributes.session_id,
       orderId: resBody.id,
       locationId: resBody.location?.id,
@@ -415,7 +428,7 @@ const getData = async (hours, fromInput, toInput) => {
         keys: Object.keys(attributes).join(', '),
         // res: Object.keys(attributes.res.body).join(', '),
         customSessionId: attributes.customSessionId,
-        date: attributes.date,
+        date: formatTimestamp(attributes.date),
         timestamp: attributes.date,
         session_id: attributes.session_id,
         orderId: resBody.id,
