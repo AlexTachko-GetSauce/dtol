@@ -13,7 +13,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 app.listen(PORT, (error) => {
   if (!error) {
-    console.log('Server is Successfully Running on 3000');
+    console.log(`Server is Successfully Running on ${PORT}`);
   } else console.log("Error occurred, server can't start", error);
 });
 
@@ -90,7 +90,7 @@ app.get('/ddupdates', async (req, res) => {
       : totals.tax + totals.fees;
 
     return {
-      // keys: Object.keys(log?.attributes.attributes).join(', '),
+      keys: Object.keys(log?.attributes.attributes).join(', '),
       // res: Object.keys(attributes.res.body).join(', '),
       customSessionId: attributes.customSessionId,
       date: attributes.date,
@@ -106,7 +106,7 @@ app.get('/ddupdates', async (req, res) => {
       taxesAndFees: Math.round(taxesAndFees * 100) / 100,
     };
   });
-  const logsJson = JSON.stringify(mappedLogs);
+  // const logsJson = JSON.stringify(mappedLogs);
 
   res.setHeader('access-control-allow-origin', '*');
   res.json({
@@ -119,81 +119,85 @@ app.get('/ddupdates', async (req, res) => {
 });
 app.get('/ddpupdates', async (req, res) => {
   console.log('ddpupdates');
+  console.time('Download Logs Time');
   const hours = req.query.hours;
-  const from = isNaN(Number(hours)) ? 'now-24h' : `now-${hours}h`;
-  const params = {
-    body: {
-      filter: {
-        // "query": "@http.url_details.path:\/api\/orders\/v1\/storefront\/orders\/*\/pay",
-        // query: 'Checkout click env:production',
-        query:
-          '@type:http-outgoing env:production service:StorefrontNextJSService source:browser @http.url_details.path:(/api/orders/v1/storefront/orders/create OR /api/orders/v1/storefront/orders/*/fulfillment-info/update OR /api/orders/v1/storefront/orders/*/tips/update OR /api/orders/v1/storefront/orders/*/discount-coupon/update OR /api/orders/v1/storefront/orders/*/redeemed-gifts/update OR /api/orders/v1/storefront/orders/*/redeemed-credits/update OR /api/orders/v1/storefront/orders/*/pay) status:info',
-        from: from,
-      },
-      sort: '-timestamp',
-      page: {
-        limit: req_limit,
-      },
-    },
-  };
+  const from = req.query.from;
+  const to = req.query.to;
+  const mappedLogsObj = await getData(hours, from, to);
+  // const from = isNaN(Number(hours)) ? 'now-24h' : `now-${hours}h`;
+  // const params = {
+  //   body: {
+  //     filter: {
+  //       // "query": "@http.url_details.path:\/api\/orders\/v1\/storefront\/orders\/*\/pay",
+  //       // query: 'Checkout click env:production',
+  //       query:
+  //         '@type:http-outgoing env:production service:StorefrontNextJSService source:browser @http.url_details.path:(/api/orders/v1/storefront/orders/create OR /api/orders/v1/storefront/orders/*/fulfillment-info/update OR /api/orders/v1/storefront/orders/*/tips/update OR /api/orders/v1/storefront/orders/*/discount-coupon/update OR /api/orders/v1/storefront/orders/*/redeemed-gifts/update OR /api/orders/v1/storefront/orders/*/redeemed-credits/update OR /api/orders/v1/storefront/orders/*/pay) status:info',
+  //       from: from,
+  //     },
+  //     sort: '-timestamp',
+  //     page: {
+  //       limit: req_limit,
+  //     },
+  //   },
+  // };
 
-  const mappedLogsObj = {};
+  // const mappedLogsObj = {};
 
-  for await (const logg of apiLogsInstance.listLogsWithPagination(params)) {
-    const attributes = logg?.attributes?.attributes;
-    if (
-      !mappedLogsObj[attributes.session_id] ||
-      mappedLogsObj[attributes.session_id].date < attributes.date
-    ) {
-      const resBody = JSON.parse(attributes.res.body);
-      const fees = resBody.fees ?? [];
-      const deliveryFees = fees.filter(
-        (el) => el.type === 'DeliveryFee' || el.type === 'SmallOrderFee'
-      );
+  // for await (const logg of apiLogsInstance.listLogsWithPagination(params)) {
+  //   const attributes = logg?.attributes?.attributes;
+  //   if (
+  //     !mappedLogsObj[attributes.session_id] ||
+  //     mappedLogsObj[attributes.session_id].date < attributes.date
+  //   ) {
+  //     const resBody = JSON.parse(attributes.res.body);
+  //     const fees = resBody.fees ?? [];
+  //     const deliveryFees = fees.filter(
+  //       (el) => el.type === 'DeliveryFee' || el.type === 'SmallOrderFee'
+  //     );
 
-      const totals = resBody.totals;
-      let deliveryFee = 0;
-      let taxesAndFees = 0;
-      let noDeliveryFees = 0;
-      if (!totals || !deliveryFees) {
-        console.log(resBody);
-      } else {
-        deliveryFee = deliveryFees.length
-          ? deliveryFees.reduce((acc, el) => acc + el.amount, 0)
-          : 0;
+  //     const totals = resBody.totals;
+  //     let deliveryFee = 0;
+  //     let taxesAndFees = 0;
+  //     let noDeliveryFees = 0;
+  //     if (!totals || !deliveryFees) {
+  //       console.log(resBody);
+  //     } else {
+  //       deliveryFee = deliveryFees.length
+  //         ? deliveryFees.reduce((acc, el) => acc + el.amount, 0)
+  //         : 0;
 
-        noDeliveryFees = deliveryFee ? totals.fees - deliveryFee : totals.fees;
-        taxesAndFees = deliveryFee
-          ? totals.tax + totals.fees - deliveryFee
-          : totals.tax + totals.fees;
-      }
+  //       noDeliveryFees = deliveryFee ? totals.fees - deliveryFee : totals.fees;
+  //       taxesAndFees = deliveryFee
+  //         ? totals.tax + totals.fees - deliveryFee
+  //         : totals.tax + totals.fees;
+  //     }
 
-      const isPaid = attributes.http.url.endsWith('pay') ? 'true' : 'false';
-      const isCreate = attributes.http.url.endsWith('create')
-        ? 'true'
-        : 'false';
-      mappedLogsObj[attributes.session_id] = {
-        // keys: Object.keys(log?.attributes.attributes).join(', '),
-        // res: Object.keys(attributes.res.body).join(', '),
-        customSessionId: attributes.customSessionId,
-        date: attributes.date,
-        timestamp: attributes.date,
-        session_id: attributes.session_id,
-        orderId: resBody.id,
-        locationId: resBody.location?.id,
-        locationName: resBody.location?.name,
-        tips: resBody.tips,
-        totals: resBody.totals,
-        type: resBody.type,
-        itemsNumber: resBody.cart?.items?.length,
-        isPaid: isPaid,
-        isCreate: isCreate,
-        noDeliveryFees: Math.round(noDeliveryFees * 100) / 100,
-        deliveryFee: Math.round(deliveryFee * 100) / 100,
-        taxesAndFees: Math.round(taxesAndFees * 100) / 100,
-      };
-    }
-  }
+  //     const isPaid = attributes.http.url.endsWith('pay') ? 'true' : 'false';
+  //     const isCreate = attributes.http.url.endsWith('create')
+  //       ? 'true'
+  //       : 'false';
+  //     mappedLogsObj[attributes.session_id] = {
+  //       // keys: Object.keys(log?.attributes.attributes).join(', '),
+  //       // res: Object.keys(attributes.res.body).join(', '),
+  //       customSessionId: attributes.customSessionId,
+  //       date: attributes.date,
+  //       timestamp: attributes.date,
+  //       session_id: attributes.session_id,
+  //       orderId: resBody.id,
+  //       locationId: resBody.location?.id,
+  //       locationName: resBody.location?.name,
+  //       tips: resBody.tips,
+  //       totals: resBody.totals,
+  //       type: resBody.type,
+  //       itemsNumber: resBody.cart?.items?.length,
+  //       isPaid: isPaid,
+  //       isCreate: isCreate,
+  //       noDeliveryFees: Math.round(noDeliveryFees * 100) / 100,
+  //       deliveryFee: Math.round(deliveryFee * 100) / 100,
+  //       taxesAndFees: Math.round(taxesAndFees * 100) / 100,
+  //     };
+  //   }
+  // }
 
   // const logs = await apiLogsInstance.listLogs(params);
   // const mappedLogs = logs?.data.map((log) => {
@@ -215,6 +219,8 @@ app.get('/ddpupdates', async (req, res) => {
   //   };
   // });
   // const logsJson = JSON.stringify(mappedLogs);
+  console.timeEnd('Download Logs Time');
+  console.log('mappedData length', Object.values(mappedLogsObj).length);
 
   res.setHeader('access-control-allow-origin', '*');
   res.json({
@@ -315,8 +321,28 @@ app.get('/ddlogs', async (req, res) => {
   // res.send({ body: req.body });
 });
 
-const getData = async (hours) => {
-  const from = isNaN(Number(hours)) ? 'now-24h' : `now-${hours}h`;
+const getData = async (hours, fromInput, toInput) => {
+  const from = isNaN(Number(hours)) ? 'now-12h' : `now-${hours}h`;
+  // const reqFrom = from;
+  // const to = toInput;
+  // const to = 'now-24h';
+  // const prefix = (date) => (date > 9 ? '' : '0');
+  // const from = `2024-09-${prefix(Number(hours))}${Number(
+  //   hours
+  // )}T00:00:00+00:00`;
+  // const to = `2024-09-${prefix(Number(hours) + 1)}${
+  //   Number(hours) + 1
+  // }T00:00:00+00:00`;
+  console.log('from, to', fromInput, toInput);
+
+  const reqFrom = fromInput
+    ? fromInput
+    : isNaN(Number(hours))
+    ? 'now-12h'
+    : `now-${hours}h`;
+  const reqTo = toInput ? toInput : 'now';
+  console.log('reqFrom, reqTo', reqFrom, reqTo);
+
   const params = {
     body: {
       filter: {
@@ -324,7 +350,10 @@ const getData = async (hours) => {
         // query: 'Checkout click env:production',
         query:
           '@type:http-outgoing env:production service:StorefrontNextJSService source:browser @http.url_details.path:(/api/orders/v1/storefront/orders/create OR /api/orders/v1/storefront/orders/*/fulfillment-info/update OR /api/orders/v1/storefront/orders/*/tips/update OR /api/orders/v1/storefront/orders/*/discount-coupon/update OR /api/orders/v1/storefront/orders/*/redeemed-gifts/update OR /api/orders/v1/storefront/orders/*/redeemed-credits/update OR /api/orders/v1/storefront/orders/*/pay) status:info',
-        from: from,
+        from: reqFrom,
+        // to: reqTo,
+        // from: from,
+        // to: to,
       },
       sort: '-timestamp',
       page: {
@@ -334,15 +363,17 @@ const getData = async (hours) => {
   };
 
   const mappedLogsObj = {};
-
   for await (const logg of apiLogsInstance.listLogsWithPagination(params)) {
     const attributes = logg?.attributes?.attributes;
     if (
       !mappedLogsObj[attributes.session_id] ||
       mappedLogsObj[attributes.session_id].date < attributes.date
     ) {
-      console.log('session_id', attributes.session_id);
+      // console.log('session_id', attributes.session_id);
       const resBody = JSON.parse(attributes.res.body);
+      // if (resBody.delivery !== null) {
+      //   console.log(resBody);
+      // }
       const fees = resBody.fees ?? [];
       const deliveryFees = fees.filter(
         (el) => el.type === 'DeliveryFee' || el.type === 'SmallOrderFee'
@@ -353,7 +384,7 @@ const getData = async (hours) => {
       let taxesAndFees = 0;
       let noDeliveryFees = 0;
       if (!totals || !deliveryFees) {
-        console.log(resBody);
+        // console.log(resBody);
       } else {
         deliveryFee = deliveryFees.length
           ? deliveryFees.reduce((acc, el) => acc + el.amount, 0)
@@ -364,13 +395,24 @@ const getData = async (hours) => {
           ? totals.tax + totals.fees - deliveryFee
           : totals.tax + totals.fees;
       }
+      const dfeesString = deliveryFees
+        .map(({ type, amount }) => `${type}: ${amount}`)
+        .join(', ');
+      // const dFeesArray = (deliveryFees ?? []).map(({type, amount}) => {type, amount})
 
       const isPaid = attributes.http.url.endsWith('pay') ? 'true' : 'false';
       const isCreate = attributes.http.url.endsWith('create')
         ? 'true'
         : 'false';
+      const hasDeliverySet = !!resBody?.delivery?.dropOff?.address;
+      // if (hasDeliverySet) {
+      //   console.log(
+      //     'attributes?.delivery?.dropOff?.address',
+      //     resBody?.delivery?.dropOff?.address
+      //   );
+      // }
       mappedLogsObj[attributes.session_id] = {
-        // keys: Object.keys(log?.attributes.attributes).join(', '),
+        keys: Object.keys(attributes).join(', '),
         // res: Object.keys(attributes.res.body).join(', '),
         customSessionId: attributes.customSessionId,
         date: attributes.date,
@@ -387,6 +429,8 @@ const getData = async (hours) => {
         isCreate: isCreate,
         noDeliveryFees: Math.round(noDeliveryFees * 100) / 100,
         deliveryFee: Math.round(deliveryFee * 100) / 100,
+        deliveryFees: dfeesString,
+        hasDeliverySet,
         taxesAndFees: Math.round(taxesAndFees * 100) / 100,
       };
     }
@@ -396,8 +440,12 @@ const getData = async (hours) => {
 
 app.get('/ddpupdates-excel', async (req, res) => {
   console.log('ddpupdates-excel');
+  console.time('Download Excel Time');
   const hours = req.query.hours;
-  const data = await getData(hours);
+  const from = req.query.from;
+  const to = req.query.to;
+  console.log('req.query', req.query);
+  const data = await getData(hours, from, to);
   const mappedData = Object.values(data).map((row) => ({
     'Location name': row.locationName,
     'Location id': row.locationId,
@@ -408,12 +456,15 @@ app.get('/ddpupdates-excel', async (req, res) => {
     Discount: row.totals.discount,
     'Delivery fee': row.deliveryFee,
     'Fees (except delivery)': row.noDeliveryFees,
+    deliveryFees: row.deliveryFees,
+    'Has set delivery': row.hasDeliverySet,
     Taxes: row.totals.tax,
     'Taxes and fees': row.taxesAndFees,
     Tips: row.totals.tips,
     Total: row.totals.total,
     Type: row.type,
     'Order Id': row.orderId,
+    date: row.date,
   }));
   console.log('mappedData length', mappedData.length);
 
@@ -424,6 +475,7 @@ app.get('/ddpupdates-excel', async (req, res) => {
     type: 'buffer',
     bookType: 'xlsx',
   });
+  console.timeEnd('Download Excel Time');
 
   // Set headers to prompt file download
   res.setHeader(
